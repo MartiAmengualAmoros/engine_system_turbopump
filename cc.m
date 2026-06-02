@@ -1,37 +1,27 @@
-﻿[inputs, properties_fuel, properties_oxidizer] = engine_inputs();
+[inputs, props_fuel, props_ox] = engine_inputs();
 
-% --- CH4 pump ---
+% --- CH4 pump: sweep over head range ---
+delta_p_CH4_range = linspace(0.5e6, 20e6, 12);  % [Pa] sweep from 0.5 to 20 MPa
 pump_CH4 = pump_efficiency_iteration( ...
     inputs.m_dot_fuel, ...
-    inputs.delta_p_pump_LCH4, ...
-    properties_fuel.rho, 'Methane', ...
-    properties_fuel.p, properties_fuel.T);
+    delta_p_CH4_range, ...
+    props_fuel.rho, 'Methane', ...
+    props_fuel.p, props_fuel.T, ...
+    'Plot', true, 'PlotX', 'delta_p');
 
-% --- LOx pump ---
+% --- LOx pump: sweep over head range ---
+delta_p_LOx_range = linspace(0.5e6, 15e6, 12);  % [Pa] sweep from 0.5 to 15 MPa
 pump_LOx = pump_efficiency_iteration( ...
     inputs.m_dot_oxidizer, ...
-    inputs.delta_p_pump_LOx, ...
-    properties_oxidizer.rho, 'Oxygen', ...
-    properties_oxidizer.p, properties_oxidizer.T);
+    delta_p_LOx_range, ...
+    props_ox.rho, 'Oxygen', ...
+    props_ox.p, props_ox.T, ...
+    'Plot', true, 'PlotX', 'delta_p');
 
-% --- Update efficiency back into inputs for downstream use ---
-inputs.eta_pump_LCH4 = pump_CH4.eta;
-inputs.eta_pump_LOx  = pump_LOx.eta;
+% --- Extract design-point efficiencies ---
+% Find closest design points to the specified delta_p values
+[~, idx_CH4] = min(abs([pump_CH4.delta_p] - inputs.delta_p_pump_LCH4));
+[~, idx_LOx] = min(abs([pump_LOx.delta_p] - inputs.delta_p_pump_LOx));
 
-% Plot: max efficiency vs Omega_s for each pump
-Omega_s_CH4 = [pump_CH4.Omega_s];
-eta_CH4 = [pump_CH4.eta];
-[uniq_Omega_s_CH4, ~, ic_CH4] = unique(Omega_s_CH4);
-eta_max_CH4 = accumarray(ic_CH4(:), eta_CH4(:), [], @max);
-
-Omega_s_LOx = [pump_LOx.Omega_s];
-eta_LOx = [pump_LOx.eta];
-[uniq_Omega_s_LOx, ~, ic_LOx] = unique(Omega_s_LOx);
-eta_max_LOx = accumarray(ic_LOx(:), eta_LOx(:), [], @max);
-
-figure;
-plot(uniq_Omega_s_CH4, eta_max_CH4, 'b-', 'LineWidth', 2); hold on;
-plot(uniq_Omega_s_LOx, eta_max_LOx, 'r-', 'LineWidth', 2);
-xlabel('\Omega_s [-]'); ylabel('\eta [-]');
-legend('CH4 pump', 'LOx pump');
-title('Max Efficiency vs Specific Speed'); grid on;
+inputs.eta_pump_LCH4 = pump_CH4(idx_CH4).eta;
+inputs.eta_pump_LOx  = pump_LOx(idx_LOx).eta;
