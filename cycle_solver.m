@@ -121,7 +121,6 @@ function [key_values, properties_flow, W_LCH4, W_LOx, P_LCH4, P_LOx] = run_cycle
     [properties_oxidizer, key_values.P_Pump_LOx] = sub_Pump_LOx(inputs, properties_oxidizer);
     properties_flow.oxidizer.Pump_LOx = properties_oxidizer;
     inputs.P_turbine_LOx_needed = key_values.P_Pump_LOx;
-
     %% Cooling Channels (only fuel)
     [properties_fuel, key_values.delta_T_Cooling_Channels] = sub_Cooling_channels(inputs, properties_fuel);
     key_values.Q_dot_Cooling = inputs.Q_dot;

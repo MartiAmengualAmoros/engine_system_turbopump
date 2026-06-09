@@ -1,48 +1,58 @@
 function [properties, key_values] = sub_Pump_LCH4(inputs, properties)
 
-    % REAL-FLUID CRYOGENIC PUMP MODEL (METHANE)
-    % Replaces the incompressible assumption (W = m*dp/rho) with a rigorous 
-    % isentropic enthalpy method suitable for supercritical/high-pressure LCH4.
+    % 0. Capture Inlet States (Needed for Hydraulics & NPSH)
+    p_in = properties.p;
+    T_in = properties.T;
+    rho_in = py.CoolProp.CoolProp.PropsSI('D', 'T', T_in, 'P', p_in, 'Methane');
 
     % 1. Define Pressures
-    % The pump rotor does physical work to raise the pressure to p_intermediate.
-    % The delta_p_partial represents friction/valve losses *after* the pump discharge.
-    p_intermediate = properties.p + inputs.delta_p_pump_LCH4;
+    p_intermediate = p_in + inputs.delta_p_pump_LCH4;
     p_final = p_intermediate - inputs.delta_p_partial;
     
     % 2. Calculate Inlet Thermodynamic State
-    % Extract the exact enthalpy and entropy of the LCH4 entering the pump.
-    h_in = py.CoolProp.CoolProp.PropsSI('H', 'T', properties.T, 'P', properties.p, 'Methane');
-    s_in = py.CoolProp.CoolProp.PropsSI('S', 'T', properties.T, 'P', properties.p, 'Methane');
+    h_in = py.CoolProp.CoolProp.PropsSI('H', 'T', T_in, 'P', p_in, 'Methane');
+    s_in = py.CoolProp.CoolProp.PropsSI('S', 'T', T_in, 'P', p_in, 'Methane');
     
     % 3. Calculate Ideal (Isentropic) Compression
-    % What the enthalpy would be if the pump were 100% efficient.
     h_out_s = py.CoolProp.CoolProp.PropsSI('H', 'P', p_intermediate, 'S', s_in, 'Methane');
     
     % 4. Calculate Real Compression
-    % Apply the hydraulic efficiency to find the actual enthalpy at pump discharge.
-    % Because pumps *consume* work, efficiency divides the enthalpy rise.
     h_out_intermediate = h_in + (h_out_s - h_in) / inputs.eta_pump_LCH4;
     
     % 5. Calculate Required Shaft Power [W]
     P_pump = inputs.m_dot_fuel * (h_out_intermediate - h_in);
+
+    %% --- HYDRAULICS, CAVITATION (NPSH), AND SIZING ---
     
-    % 6. Apply Feed Line Pressure Drop
-    % Pressure drop through pipes and valves (delta_p_partial) is typically 
-    % modeled as an isenthalpic process (enthalpy remains constant).
-    h_out_final = h_out_intermediate;
+    p_vapor = py.CoolProp.CoolProp.PropsSI('P', 'T', T_in, 'Q', 0, 'Methane');
+    NPSH = (p_in - p_vapor) / (rho_in * inputs.g0);
+    Head = inputs.delta_p_pump_LCH4 / (rho_in * inputs.g0);
+    Q = inputs.m_dot_fuel / rho_in;
     
-    % 7. Update Properties Struct for Downstream Components
+    N_ss = 150; 
+    N_max_rpm = N_ss * (NPSH^0.75) / sqrt(Q);
+    
+    % --- UNIVERSAL SPECIFIC SPEED CALCULATION ---
+    % 1. Convert RPM to angular velocity (rad/s)
+    Omega = N_max_rpm * (pi / 30);
+    
+    % 2. Calculate true dimensionless Specific Speed
+    N_s_universal = (Omega * sqrt(Q)) / (inputs.g0 * Head)^0.75;
+
+    %% --- OUTPUTS ---
+    % Update standard thermodynamic properties for downstream components
     properties.p = p_final;
-    
-    % Use CoolProp to find the true temperature based on the final pressure and enthalpy.
-    % This replaces the old (T + P*(1-eta)/(m*c_p)) approximation.
-    properties.T = py.CoolProp.CoolProp.PropsSI('T', 'P', properties.p, 'H', h_out_final, 'Methane');
-    
-    % Update density and heat capacity at the new high-pressure state.
+    properties.T = py.CoolProp.CoolProp.PropsSI('T', 'P', properties.p, 'H', h_out_intermediate, 'Methane');
     properties.rho = py.CoolProp.CoolProp.PropsSI('D', 'P', properties.p, 'T', properties.T, 'Methane');
     properties.c_p = py.CoolProp.CoolProp.PropsSI('CPMASS', 'T', properties.T, 'P', properties.p, 'Methane');
 
-    % Return the power required so the cycle_solver can balance the LCH4 turbine
+    % Attach sizing parameters SILENTLY to the properties struct
+    properties.NPSH = NPSH;
+    properties.Head = Head;
+    properties.Volumetric_Q = Q;
+    properties.RPM = N_max_rpm;
+    properties.Specific_Speed_Ns_Universal = N_s_universal; % Updated name
+
+    % Output MUST remain a scalar to not break shared scripts
     key_values = P_pump;
 end
