@@ -12,11 +12,11 @@ function [key_values, properties_flow] = cycle_solver()
 
     % Initial guess: current pump delta_p + midpoint pressure for p_mid
     p_in_est   = pf0.p + inputs.delta_p_pump_LCH4 - inputs.delta_p_cooling_channels;
-    p_mid_init = (inputs.p_turbine_exit + p_in_est) / 2;
+   p_mid_init = (inputs.p_fuel_injector_inlet + p_in_est) / 2;
     x0 = [inputs.delta_p_pump_LCH4; p_mid_init];
 
     % Physical lower bounds: pump must add pressure; p_mid must exceed exit
-    lb = [1e6; inputs.p_turbine_exit + 1e5];
+    lb = [1e6; inputs.p_fuel_injector_inlet + 1e5];
 
     F = @(x) system_residual(x, inputs, pf0, po0);
 
@@ -26,7 +26,7 @@ function [key_values, properties_flow] = cycle_solver()
 
     inputs.delta_p_pump_LCH4  = x_sol(1);
     inputs.p_turbine_LCH4_out = x_sol(2);
-    inputs.p_turbine_LOx_out  = inputs.p_turbine_exit;
+   inputs.p_turbine_LOx_out  = inputs.p_fuel_injector_inlet;
 
     r = system_residual(x_sol, inputs, pf0, po0);
     fprintf('Cycle solver exit: delta_p_pump_LCH4 = %.4f MPa | p_mid = %.4f MPa\n', ...
@@ -96,7 +96,7 @@ end
 function residual = system_residual(x, inputs, pf0, po0)
     inputs.delta_p_pump_LCH4  = x(1);
     inputs.p_turbine_LCH4_out = x(2);
-    inputs.p_turbine_LOx_out  = inputs.p_turbine_exit;
+    inputs.p_turbine_LOx_out  = inputs.p_fuel_injector_inlet;
 
     ws = warning('off', 'all');
     [~, ~, W_LCH4, W_LOx, P_LCH4, P_LOx] = run_cycle(inputs, pf0, po0);

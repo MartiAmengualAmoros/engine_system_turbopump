@@ -10,14 +10,14 @@ function [inputs, properties_fuel, properties_oxidizer] = engine_inputs()
 
     %% Efficiencies
     inputs.eta_pump_LOx = 0.70;             % (Ask teams and revise)
-    inputs.eta_pump_LCH4 = 0.70;            % (Ask teams and revise)
+    inputs.eta_pump_LCH4 = 0.60;            % (Ask teams and revise)
     inputs.eta_turbine_LOx = 0.65;          % (Ask teams and revise)
     inputs.eta_turbine_LCH4 = 0.65;         % (Ask teams and revise)
     inputs.eta_combustion = 0.98;           % (Ask teams and revise)
     inputs.eta_nozzle = 0.96;               % (Ask teams and revise)
 
     %% Propellant properties
-    inputs.ROF = 3.4;                       % (Research and ask Thrust chamber)  stoch
+    inputs.ROF = 3.15;                       % (Research and ask Thrust chamber)  stoch
     [T_CC, M, k] = get_cea_properties(inputs.p_CC_req, inputs.ROF);
     inputs.T_CC_ideal = T_CC;
     inputs.Molar_mass_CC_ideal = M;
@@ -30,23 +30,26 @@ function [inputs, properties_fuel, properties_oxidizer] = engine_inputs()
     inputs.m_dot_oxidizer = inputs.m_dot_tot - inputs.m_dot_fuel;
 
     %% Pressures
-    inputs.delta_p_inj_percent = 0.20;      % [-]       % (Ask Injector)
-    inputs.delta_p_cooling_channels = 15e5; % [Pa]      % (Research and ask Thrust Chamber)
-    inputs.delta_p_feed = 5e5;              % [Pa]      % (Research) Total lines and valves losses
-    inputs.delta_p_partial = inputs.delta_p_feed / 5;   % (Research and see if valid way to implement) 
-    inputs.delta_p_pump_LCH4 = 6e6;         % [Pa]      % initial guess for solver — tuned to p_CC_req
+    % The team's math translates to a 7% fuel loss and an 8% oxidizer loss
+    inputs.delta_p_inj_percent_LOx = 0.10;      
+    inputs.delta_p_inj_percent_LCH4 = 0.07;     
+    
+    inputs.delta_p_cooling_channels = 16.9e5;   % Team's 16.9 bar drop
+    inputs.delta_p_feed = 5e5;              
+    inputs.delta_p_partial = inputs.delta_p_feed / 5;   
+    inputs.delta_p_pump_LCH4 = 6e6;         
 
-    % Turbine exit pressure — forced by injector inlet requirement.
-    % Injector model drops p by (1 - delta_p_inj_percent), so to land exactly at p_CC: p_in = p_CC / (1 - pct)
-    inputs.p_turbine_exit = inputs.p_CC_req / (1 - inputs.delta_p_inj_percent);
+    % SEPARATE Target Inlet Pressures for the Injectors (Working backward from 80 bar)
+    inputs.p_fuel_injector_inlet = inputs.p_CC_req / (1 - inputs.delta_p_inj_percent_LCH4);
+    inputs.p_lox_injector_inlet = inputs.p_CC_req / (1 - inputs.delta_p_inj_percent_LOx);
 
-    % LOx pump rise derived from turbine exit pressure so the chain always closes:
-    % p_exit_LOx = p_tank + delta_p_pump_LOx - delta_p_partial = p_turbine_exit
-    p_tank_LOx = 2e5;                       % [Pa]  oxidizer tank pressure
-    inputs.delta_p_pump_LOx = inputs.p_turbine_exit - p_tank_LOx + inputs.delta_p_partial;
+    % LOx Line End: The LOx pump feeds the LOx injector directly
+    p_tank_LOx = 2e5;                       
+    inputs.delta_p_pump_LOx = inputs.p_lox_injector_inlet - p_tank_LOx + inputs.delta_p_partial;
 
     %% Cooling assumptions
-    inputs.Q_dot = 5e6;                     % [J/s]     % (Ask Thrust Chamber)
+    % Bumped up slightly to hit the team's 540 K target
+    inputs.Q_dot = 4e6;                   % [J/s]
 
     %% Fuel properties (input here initial properties
     properties_fuel.T = 110;                % [K]       % (Design choice, fairly easy, just a quick research)

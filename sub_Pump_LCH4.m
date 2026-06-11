@@ -22,22 +22,26 @@ function [properties, key_values] = sub_Pump_LCH4(inputs, properties)
     % 5. Calculate Required Shaft Power [W]
     P_pump = inputs.m_dot_fuel * (h_out_intermediate - h_in);
 
-    %% --- HYDRAULICS, CAVITATION (NPSH), AND SIZING ---
+   %% --- HYDRAULICS, CAVITATION (NPSH), AND SIZING ---
     
     p_vapor = py.CoolProp.CoolProp.PropsSI('P', 'T', T_in, 'Q', 0, 'Methane');
     NPSH = (p_in - p_vapor) / (rho_in * inputs.g0);
-    Head = inputs.delta_p_pump_LCH4 / (rho_in * inputs.g0);
+    Head_Total = inputs.delta_p_pump_LCH4 / (rho_in * inputs.g0);
     Q = inputs.m_dot_fuel / rho_in;
     
-    N_ss = 150; 
-    N_max_rpm = N_ss * (NPSH^0.75) / sqrt(Q);
+    % --- 2-STAGE PUMP WITH INDUCER ARCHITECTURE ---
+    n_stages = 4;
+    Head_per_stage = Head_Total / n_stages;
     
-    % --- UNIVERSAL SPECIFIC SPEED CALCULATION ---
-    % 1. Convert RPM to angular velocity (rad/s)
+    % Inducer Suction Specific Speed
+    N_ss = 300; 
+    
+    % Calculate RPM based on the inducer limits
+    N_max_rpm = N_ss * (NPSH^0.75) / sqrt(Q);
     Omega = N_max_rpm * (pi / 30);
     
-    % 2. Calculate true dimensionless Specific Speed
-    N_s_universal = (Omega * sqrt(Q)) / (inputs.g0 * Head)^0.75;
+    % Calculate Universal Specific Speed PER STAGE
+    N_s_universal = (Omega * sqrt(Q)) / (inputs.g0 * Head_per_stage)^0.75;
 
     %% --- OUTPUTS ---
     % Update standard thermodynamic properties for downstream components
@@ -48,10 +52,11 @@ function [properties, key_values] = sub_Pump_LCH4(inputs, properties)
 
     % Attach sizing parameters SILENTLY to the properties struct
     properties.NPSH = NPSH;
-    properties.Head = Head;
+    properties.Head_Total = Head_Total;
+    properties.Head_Per_Stage = Head_per_stage;
     properties.Volumetric_Q = Q;
     properties.RPM = N_max_rpm;
-    properties.Specific_Speed_Ns_Universal = N_s_universal; % Updated name
+    properties.Specific_Speed_Ns_Universal = N_s_universal;
 
     % Output MUST remain a scalar to not break shared scripts
     key_values = P_pump;

@@ -5,7 +5,7 @@ function [properties, key_values] = sub_Injector_CH4(inputs, properties)
 
     properties.T = properties.T; % ?
 
-    properties.p = properties.p * (1 - inputs.delta_p_inj_percent);
+    properties.p = properties.p * (1 - inputs.delta_p_inj_percent_LCH4);
 
     properties.rho = py.CoolProp.CoolProp.PropsSI('D', 'P', properties.p, 'T', properties.T, 'Methane');
     properties.c_p = py.CoolProp.CoolProp.PropsSI('CPMASS', 'T', properties.T, 'P', properties.p, 'Methane');
