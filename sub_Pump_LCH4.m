@@ -29,7 +29,7 @@ function [properties, key_values] = sub_Pump_LCH4(inputs, properties)
     Head_Total = inputs.delta_p_pump_LCH4 / (rho_in * inputs.g0);
     Q = inputs.m_dot_fuel / rho_in;
     
-    % --- 2-STAGE PUMP WITH INDUCER ARCHITECTURE ---
+    % --- 4-STAGE PUMP WITH INDUCER ARCHITECTURE ---
     n_stages = 4;
     Head_per_stage = Head_Total / n_stages;
     
