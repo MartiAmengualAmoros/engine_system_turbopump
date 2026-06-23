@@ -34,7 +34,7 @@ function [inputs, properties_fuel, properties_oxidizer] = engine_inputs()
     inputs.delta_p_inj_percent_LOx = 0.10;      
     inputs.delta_p_inj_percent_LCH4 = 0.07;     
     
-    inputs.delta_p_cooling_channels = 16.9e5;   % Team's 16.9 bar drop
+    inputs.delta_p_cooling_channels = 13e5;   % Team's 16.9 bar drop
     inputs.delta_p_feed = 5e5;              
     inputs.delta_p_partial = inputs.delta_p_feed / 5;   
     inputs.delta_p_pump_LCH4 = 6e6;         
