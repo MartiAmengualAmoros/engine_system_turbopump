@@ -17,7 +17,7 @@ function [inputs, properties_fuel, properties_oxidizer] = engine_inputs()
     inputs.eta_nozzle = 0.96;               % (Ask teams and revise)
 
     %% Propellant properties
-    inputs.ROF = 3.15;                       % (Research and ask Thrust chamber)  stoch
+    inputs.ROF = 3.09;                       % (Research and ask Thrust chamber)  stoch
     [T_CC, M, k] = get_cea_properties(inputs.p_CC_req, inputs.ROF);
     inputs.T_CC_ideal = T_CC;
     inputs.Molar_mass_CC_ideal = M;
