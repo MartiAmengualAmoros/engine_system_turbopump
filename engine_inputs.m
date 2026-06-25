@@ -46,6 +46,19 @@ function [inputs, properties_fuel, properties_oxidizer] = engine_inputs()
     % LOx Line End: The LOx pump feeds the LOx injector directly
     p_tank_LOx = 2e5;                       
     inputs.delta_p_pump_LOx = inputs.p_lox_injector_inlet - p_tank_LOx + inputs.delta_p_partial;
+ %% Turbine geometry inputs
+    inputs.D_mean_LCH4    = 0.05;    % [m]   Initial estimate — update from impeller sizing
+    inputs.nu_target_LCH4 = 0.45;    % [-]   Blade speed ratio target (impulse: 0.35–0.50)
+    inputs.D_mean_LOx     = 0.06;    % [m]   Initial estimate
+    inputs.nu_target_LOx  = 0.45;    % [-]   Blade speed ratio target
+    % Turbine exit pressure — forced by injector inlet requirement.
+    % Injector model drops p by (1 - delta_p_inj_percent), so to land exactly at p_CC: p_in = p_CC / (1 - pct)
+    inputs.p_turbine_exit = inputs.p_CC_req / (1 - inputs.delta_p_inj_percent_LCH4);
+
+    % LOx pump rise derived from turbine exit pressure so the chain always closes:
+    % p_exit_LOx = p_tank + delta_p_pump_LOx - delta_p_partial = p_turbine_exit
+    p_tank_LOx = 2e5;                       % [Pa]  oxidizer tank pressure
+    inputs.delta_p_pump_LOx = inputs.p_turbine_exit - p_tank_LOx + inputs.delta_p_partial;
 
     %% Cooling assumptions
     % Bumped up slightly to hit the team's 540 K target

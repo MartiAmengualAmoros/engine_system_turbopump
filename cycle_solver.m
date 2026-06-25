@@ -40,6 +40,20 @@ function [key_values, properties_flow] = cycle_solver()
 
     [key_values, properties_flow] = run_cycle(inputs, pf0, po0);
     plot_cycle(key_values, properties_flow)
+
+    % ---- FINAL TURBINE REPORT (reads from key_values forwarded by run_cycle) ----
+fprintf('\n===== TURBINE RESULTS =====\n');
+fprintf('[T-LCH4] Architecture : %s\n',   key_values.architecture_LCH4);
+fprintf('[T-LCH4] n_stages     : %d\n',   key_values.n_stages_LCH4);
+fprintf('[T-LCH4] nu_actual    : %.3f\n', key_values.nu_actual_LCH4);
+fprintf('[T-LCH4] h_blade      : %.2f mm\n', key_values.h_blade_LCH4 * 1e3);
+fprintf('[T-LCH4] HTR          : %.3f\n', key_values.HTR_LCH4);
+fprintf('[T-LOx]  Architecture : %s\n',   key_values.architecture_LOx);
+fprintf('[T-LOx]  n_stages     : %d\n',   key_values.n_stages_LOx);
+fprintf('[T-LOx]  nu_actual    : %.3f\n', key_values.nu_actual_LOx);
+fprintf('[T-LOx]  h_blade      : %.2f mm\n', key_values.h_blade_LOx * 1e3);
+fprintf('[T-LOx]  HTR          : %.3f\n', key_values.HTR_LOx);
+fprintf('===========================\n');
 end
 
 % -------------------------------------------------------------------------
@@ -114,33 +128,51 @@ function [key_values, properties_flow, W_LCH4, W_LOx, P_LCH4, P_LOx] = run_cycle
     properties_flow.oxidizer.Tanks = properties_oxidizer;
 
     %% Pumps
-    [properties_fuel, key_values.P_Pump_LCH4] = sub_Pump_LCH4(inputs, properties_fuel);
-    properties_flow.fuel.Pump_LCH4 = properties_fuel;
-    inputs.P_turbine_LCH4_needed = key_values.P_Pump_LCH4;
+  [properties_fuel,     key_values.P_Pump_LCH4] = sub_Pump_LCH4(inputs, properties_fuel);
+properties_flow.fuel.Pump_LCH4                = properties_fuel;
+inputs.P_turbine_LCH4_needed                  = key_values.P_Pump_LCH4;
+inputs.N_shaft_LCH4                           = properties_fuel.RPM;
+%inputs.D_mean_LCH4  = properties_fuel.D_impeller; % forward from pump
 
-    [properties_oxidizer, key_values.P_Pump_LOx] = sub_Pump_LOx(inputs, properties_oxidizer);
-    properties_flow.oxidizer.Pump_LOx = properties_oxidizer;
-    inputs.P_turbine_LOx_needed = key_values.P_Pump_LOx;
+[properties_oxidizer, key_values.P_Pump_LOx]  = sub_Pump_LOx(inputs, properties_oxidizer);
+properties_flow.oxidizer.Pump_LOx             = properties_oxidizer;
+inputs.P_turbine_LOx_needed                   = key_values.P_Pump_LOx;
+inputs.N_shaft_LOx                            = properties_oxidizer.RPM;
+%inputs.D_mean_LOx    = properties_oxidizer.D_impeller; % forward from pump
     %% Cooling Channels (only fuel)
     [properties_fuel, key_values.delta_T_Cooling_Channels] = sub_Cooling_channels(inputs, properties_fuel);
     key_values.Q_dot_Cooling = inputs.Q_dot;
     properties_flow.fuel.Cooling_Channels = properties_fuel;
 
     %% Turbines — p_turbine_LCH4_out and p_turbine_LOx_out set by solver
-    [properties_fuel, kv_LCH4] = sub_Turbine_LCH4(inputs, properties_fuel);
-    key_values.delta_p_Turbine_LCH4 = kv_LCH4.delta_p;
-    key_values.W_Turbine_LCH4       = kv_LCH4.W_available;
-    properties_flow.fuel.Turbine_LCH4 = properties_fuel;
+    %% Turbines
+[properties_fuel, kv_LCH4] = sub_Turbine_LCH4(inputs, properties_fuel);
+key_values.delta_p_Turbine_LCH4 = kv_LCH4.delta_p;
+key_values.W_Turbine_LCH4       = kv_LCH4.W_available;
+% BUG FIX: forward geometry fields with _LCH4 suffix so cycle_solver fprintf can read them
+key_values.architecture_LCH4    = kv_LCH4.architecture;
+key_values.n_stages_LCH4        = kv_LCH4.n_stages;
+key_values.nu_actual_LCH4       = kv_LCH4.nu_actual;
+key_values.h_blade_LCH4         = kv_LCH4.h_blade;
+key_values.HTR_LCH4             = kv_LCH4.HTR;
+properties_flow.fuel.Turbine_LCH4 = properties_fuel;
 
-    [properties_fuel, kv_LOx] = sub_Turbine_LOx(inputs, properties_fuel);
-    key_values.delta_p_Turbine_LOx = kv_LOx.delta_p;
-    key_values.W_Turbine_LOx       = kv_LOx.W_available;
-    properties_flow.fuel.Turbine_LOx = properties_fuel;
+[properties_fuel, kv_LOx] = sub_Turbine_LOx(inputs, properties_fuel);
+key_values.delta_p_Turbine_LOx  = kv_LOx.delta_p;
+key_values.W_Turbine_LOx        = kv_LOx.W_available;
+% BUG FIX: forward geometry fields with _LOx suffix
+key_values.architecture_LOx     = kv_LOx.architecture;
+key_values.n_stages_LOx         = kv_LOx.n_stages;
+key_values.nu_actual_LOx        = kv_LOx.nu_actual;
+key_values.h_blade_LOx          = kv_LOx.h_blade;
+key_values.HTR_LOx              = kv_LOx.HTR;
+properties_flow.fuel.Turbine_LOx = properties_fuel;
 
-    W_LCH4 = kv_LCH4.W_available;
-    W_LOx  = kv_LOx.W_available;
-    P_LCH4 = inputs.P_turbine_LCH4_needed;
-    P_LOx  = inputs.P_turbine_LOx_needed;
+W_LCH4 = kv_LCH4.W_available;
+W_LOx  = kv_LOx.W_available;
+P_LCH4 = inputs.P_turbine_LCH4_needed;
+P_LOx  = inputs.P_turbine_LOx_needed;
+
 
     %% Injectors
     [properties_fuel, key_values.TC_Ingoing_fuel] = sub_Injector_CH4(inputs, properties_fuel);
