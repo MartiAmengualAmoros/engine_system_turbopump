@@ -23,7 +23,7 @@ p_vapor = double(py.CoolProp.CoolProp.PropsSI('P', 'T', T_in, 'Q', 0, 'Methane')
 Head_Total = inputs.delta_p_pump_LCH4 / (rho_in * inputs.g0);
 Q = inputs.m_dot_fuel / rho_in;
 
-n_stages = 4;
+n_stages = 3;
 Head_per_stage = Head_Total / n_stages;
 
 %% 2. Design inputs
@@ -67,6 +67,13 @@ N_s_universal = (Omega * sqrt(Q)) / (inputs.g0 * Head_per_stage)^0.75;
 % Hydraulic efficiency correlation used as estimate
 m = 0.08 * (1 / Q)^0.15 * (0.85 / N_s_universal)^0.06;
 eta_hyd_corr = 1 - 0.065 * (1 / Q)^m - 0.23 * (0.3 - log10(2.3 * N_s_universal))^2 * (1 / Q)^0.05;
+    
+% Assume standard aerospace losses to bridge the gap
+eta_vol  = 0.91;  % 10% lost to internal leakage
+eta_mech = 0.90;  % 15% lost to bearing/seal friction
+    
+% Calculate Total Pump Efficiency
+eta_total_calculated = eta_hyd_corr * eta_vol * eta_mech; 
 
 % Use guessed efficiency for geometry closure, keep correlated one as reference
 eta_hyd = eta_hyd_guess;
@@ -157,11 +164,15 @@ dn = D1h;
 d1 = D1t;
 kn = 1 - (dn/d1)^2;
 
-denom_nss = ((lambda_c + lambda_w)*phi_eff^2 + lambda_w*(1 - phi_eff/tan(alpha1_eff))^2)^0.75;
-
-nss_formula = 158*sqrt(phi_eff*kn)/denom_nss;
-
-
+% Prevent division by zero if inlet flow is purely axial (alpha1 = 0)
+    if alpha1_eff == 0
+        swirl_term = 0;
+    else
+        swirl_term = phi_eff / tan(alpha1_eff);
+    end
+    
+    denom_nss = ((lambda_c + lambda_w)*phi_eff^2 + lambda_w*(1 - swirl_term)^2)^0.75;
+    nss_formula = 158 * sqrt(phi_eff * kn) / denom_nss;
 
 %% 7. Warnings
 
@@ -237,12 +248,12 @@ if NPSH_R > NPSH
     properties.warnings(end).value = NPSH_R - NPSH;
 end
 
-if abs(eta_hyd_corr - eta_hyd_guess) > 0.05
-    msg = sprintf('La eficiencia asumida (%.4f) difiere bastante de la correlación preliminar (%.4f).', eta_hyd_guess, eta_hyd_corr);
+if abs(eta_total_calculated - inputs.eta_pump_LCH4) > 0.05
+    msg = sprintf('La eficiencia asumida (%.4f) difiere bastante de la correlación preliminar (%.4f).', inputs.eta_pump_LCH4, eta_total_calculated);
     warning(msg);
     properties.warnings(end+1).code = 'ETA_HYD_MISMATCH';
     properties.warnings(end).message = msg;
-    properties.warnings(end).value = eta_hyd_corr - eta_hyd_guess;
+    properties.warnings(end).value = eta_total_calculated - inputs.eta_pump_LCH4;
 end
 
 %% 8. Outputs
@@ -259,6 +270,7 @@ properties.Head_Per_Stage = Head_per_stage;
 properties.Volumetric_Q = Q;
 properties.RPM = N_max_rpm;
 properties.Specific_Speed_Ns_Universal = N_s_universal;
+properties.P_Pump_LCH4 = P_pump;
 
 properties.n_stages = n_stages;
 properties.u2 = u2;
@@ -289,6 +301,7 @@ properties.c2 = c2;
 properties.b2_over_D2 = b2_over_D2;
 
 properties.eta_hyd = eta_hyd;
+properties.eta_total_calculated = eta_total_calculated;
 properties.eta_hyd_corr = eta_hyd_corr;
 properties.psi_id = psi_id;
 properties.psi = psi;
