@@ -25,14 +25,14 @@ function [inputs, properties_fuel, properties_oxidizer] = engine_inputs()
     inputs.v_e_ideal = sqrt(inputs.eta_nozzle * 2 * (inputs.kappa_CC_ideal/(inputs.kappa_CC_ideal-1)) * (inputs.R_gas/inputs.Molar_mass_CC_ideal) * inputs.T_CC_ideal * (1 - (101300/inputs.p_CC_req)^((inputs.kappa_CC_ideal-1)/inputs.kappa_CC_ideal)));
 
     %% Get necessary massflow (at given ROF):
-    inputs.m_dot_tot = inputs.F_thrust_req / inputs.v_e_ideal;    % add pressure terms later, when nozzle defined
-    inputs.m_dot_fuel = inputs.m_dot_tot / (inputs.ROF + 1);
-    inputs.m_dot_oxidizer = inputs.m_dot_tot - inputs.m_dot_fuel;
+    inputs.m_dot_tot = 13.154;    % add pressure terms later, when nozzle defined
+    inputs.m_dot_fuel = 3.233;
+    inputs.m_dot_oxidizer = 9.921;
 
     %% Pressures
     % The team's math translates to a 7% fuel loss and an 8% oxidizer loss
-    inputs.delta_p_inj_percent_LOx = 0.10;      
-    inputs.delta_p_inj_percent_LCH4 = 0.07;     
+    inputs.delta_p_inj_percent_LOx = 0.2;      
+    inputs.delta_p_inj_percent_LCH4 = 0.2;     
     
     inputs.delta_p_cooling_channels = 13e5;   % Team's 16.9 bar drop
     inputs.delta_p_feed = 5e5;              
@@ -40,11 +40,11 @@ function [inputs, properties_fuel, properties_oxidizer] = engine_inputs()
     inputs.delta_p_pump_LCH4 = 6e6;         
 
     % SEPARATE Target Inlet Pressures for the Injectors (Working backward from 80 bar)
-    inputs.p_fuel_injector_inlet = inputs.p_CC_req / (1 - inputs.delta_p_inj_percent_LCH4);
-    inputs.p_lox_injector_inlet = inputs.p_CC_req / (1 - inputs.delta_p_inj_percent_LOx);
+    inputs.p_fuel_injector_inlet = 88e5; % [Pa]   stoch
+    inputs.p_lox_injector_inlet = 91.93e5; % [Pa]   stoch
 
     % LOx Line End: The LOx pump feeds the LOx injector directly
-    p_tank_LOx = 2e5;                       
+    p_tank_LOx = 1.951e5;                       
     inputs.delta_p_pump_LOx = inputs.p_lox_injector_inlet - p_tank_LOx + inputs.delta_p_partial;
  %% Turbine geometry inputs
     inputs.D_mean_LCH4    = 0.05;    % [m]   Initial estimate — update from impeller sizing
@@ -57,7 +57,7 @@ function [inputs, properties_fuel, properties_oxidizer] = engine_inputs()
 
     % LOx pump rise derived from turbine exit pressure so the chain always closes:
     % p_exit_LOx = p_tank + delta_p_pump_LOx - delta_p_partial = p_turbine_exit
-    p_tank_LOx = 2e5;                       % [Pa]  oxidizer tank pressure
+    p_tank_LOx = 1.951e5;                       % [Pa]  oxidizer tank pressure
     inputs.delta_p_pump_LOx = inputs.p_turbine_exit - p_tank_LOx + inputs.delta_p_partial;
 
     %% Cooling assumptions
@@ -66,13 +66,13 @@ function [inputs, properties_fuel, properties_oxidizer] = engine_inputs()
 
     %% Fuel properties (input here initial properties
     properties_fuel.T = 110;                % [K]       % (Design choice, fairly easy, just a quick research)
-    properties_fuel.p = 2e5;                % [Pa]
+    properties_fuel.p = 1.986e5;                % [Pa]
     properties_fuel.rho = py.CoolProp.CoolProp.PropsSI('D', 'P', properties_fuel.p, 'T', properties_fuel.T, 'Methane');
     properties_fuel.c_p = py.CoolProp.CoolProp.PropsSI('CPMASS', 'T', properties_fuel.T, 'P', properties_fuel.p, 'Methane');
 
     %% Fuel properties (input here initial properties);
     properties_oxidizer.T = 90;             % [K]
-    properties_oxidizer.p = 2e5;            % [Pa]
+    properties_oxidizer.p = 1.951e5;            % [Pa]
     properties_oxidizer.rho = py.CoolProp.CoolProp.PropsSI('D', 'P', properties_oxidizer.p, 'T', properties_oxidizer.T, 'Oxygen');
     properties_oxidizer.c_p = py.CoolProp.CoolProp.PropsSI('CPMASS', 'T', properties_oxidizer.T, 'P', properties_oxidizer.p, 'Oxygen');
 

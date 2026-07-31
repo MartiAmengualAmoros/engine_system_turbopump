@@ -35,8 +35,8 @@ delta_p_inducer = 1.2e5;   % [Pa]
 alpha1_inducer = 0.0;      % [rad]
 w1u_factor_inducer = 0.50; % only used for NPSH_R correction if desired
 
-% -------- Impeller design inputs (SET B inspired) --------
-eta_hyd_guess = 0.7;
+% -------- Impeller design inputs  --------
+eta_hyd_guess = 0.85;
 alpha1_base = 0.0;
 delta_h = 0.30;
 
