@@ -170,7 +170,7 @@ key_values.psi_LOx               = kv_pump_LOx.psi;
 key_values.phi_LOx               = kv_pump_LOx.phi;
 key_values.n_stages_pump_LOx     = kv_pump_LOx.n_stages;
 key_values.Head_LOx              = kv_pump_LOx.Head;
-key_values.NPSH_LOx              = kv_pump_LOx.NPSH;
+key_values.NPSH_LOx              = kv_pump_LOx.NPSH_system;
 key_values.N_max_cavitation_LOx  = kv_pump_LOx.N_max_cavitation;
 key_values.Ns_pump_LOx           = kv_pump_LOx.Ns_pump;
 

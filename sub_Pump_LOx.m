@@ -5,6 +5,8 @@ function [properties, key_values] = sub_Pump_LOx(inputs, properties)
 p_in = properties.p;
 T_in = properties.T;
 
+properties.warnings = struct('code', {}, 'message', {}, 'value', {});
+
 rho_in = double(py.CoolProp.CoolProp.PropsSI('D', 'T', T_in, 'P', p_in, 'Oxygen'));
 mu_in  = double(py.CoolProp.CoolProp.PropsSI('VISCOSITY', 'T', T_in, 'P', p_in, 'Oxygen'));
 h_in   = double(py.CoolProp.CoolProp.PropsSI('H', 'T', T_in, 'P', p_in, 'Oxygen'));
@@ -44,6 +46,8 @@ alpha1_base = 0.0;
 delta_h = 0.30;
 b2_over_D2 = 0.09;
 
+N_ss = 410;
+
 %% 3. Effective inlet conditions after inducer
 
 p_in_eff = p_in;
@@ -54,7 +58,16 @@ if use_inducer
     alpha1_eff = alpha1_inducer;
 end
 
-NPSH = (p_in_eff - p_vapor) / (rho_in * inputs.g0);
+D_pipe_suction = 0.08; % [m] Suction pipe diameter (LOx requires slightly larger than LCH4)
+A_pipe_suction = pi/4 * D_pipe_suction^2; % [m^2] Suction pipe area
+c_abs_suction = Q / A_pipe_suction; % [m/s] Absolute velocity at suction pipe
+
+NPSH_system = (p_in - p_vapor) / (rho_in * inputs.g0) + c_abs_suction^2 / (2 * inputs.g0);
+
+rpm_limit = N_ss * (NPSH_system^0.75) / sqrt(Q);
+Security_factor = 0.9;
+N_max_rpm = Security_factor * rpm_limit;
+
 Omega = N_max_rpm * (pi / 30);
 
 %% 4. Specific speed and preliminary coefficients
@@ -144,34 +157,129 @@ w2 = c2m / cos(beta2);
 c1 = c1m / cos(alpha1_eff);
 c2 = c2m / cos(alpha2);
 
-%% 6. Cavitation check
+%% 6. Cavitation check & Geometry Validation
 
-w1u_eff = w1u;
-if use_inducer
-    w1u_eff = w1u * w1u_factor_inducer;
+g = inputs.g0;
+
+% 1. Required input parameters for NPSH calculations
+sigma_inducer = 0.065;
+sigma_impeller = 0.2;
+B_inducer = 0.15;
+B_impeller = 0.12;
+delta_p_between_inducer_impeller = 0.01 * delta_p_inducer; % Assume ~1% of total head loss
+
+% 2. Variables reutilizadas
+delta_p_inducer_static = delta_p_inducer; 
+D_ind_tip_in = D1t;                       
+D_ind_hub_in = D1h;                       
+c_u_inducer_in = 0;                       
+p_suction = p_in;                         
+
+%% 6.1 Inducer NPSH & Geometry
+
+A_inducer_in_geom = pi/4 * (D_ind_tip_in^2 - D_ind_hub_in^2);
+A_inducer_in_eff = A_inducer_in_geom * (1 - B_inducer);
+
+if A_inducer_in_eff <= 0
+    error('The effective inducer inlet area is not positive. Check blockage factor.');
 end
 
-NPSH_R = lambda_c * (c1m^2 / (2 * inputs.g0)) + lambda_w * (w1u_eff^2 / (2 * inputs.g0));
+c_m_inducer_LE = Q / A_inducer_in_eff;
 
-%% n_ss calculation
+% NPSH disponible en la entrada del inductor
+NPSH_A_inducer = (p_suction - p_vapor) / (rho_in * g) + c_abs_suction^2 / (2*g);
 
-dn = D1h;
-d1 = D1t;
-kn = 1 - (dn/d1)^2;
+% Triángulo de velocidades y NPSH requerido del inducer
+u_inducer_tip = Omega * D_ind_tip_in / 2;
+u_ind_hub     = Omega * D_ind_hub_in / 2;
 
-% Prevent division by zero if inlet flow is purely axial (alpha1 = 0)
-if alpha1_eff == 0
-    swirl_term = 0;
-else
-    swirl_term = phi_eff / tan(alpha1_eff);
+w_inducer_tip_LE = hypot(c_m_inducer_LE, u_inducer_tip - c_u_inducer_in);
+
+NPSH_R_inducer = sigma_inducer * w_inducer_tip_LE^2 / (2*g);
+margin_inducer = NPSH_A_inducer - NPSH_R_inducer;
+
+%% 6.1b Inducer exit swirl 
+
+Delta_h_ind = delta_p_inducer_static / (rho_in * g);
+c_u_ind_out_tip = Delta_h_ind * g / u_inducer_tip;
+c_u_ind_out_hub = Delta_h_ind * g / u_ind_hub;
+c_u_ind_out_mean = 0.5 * (c_u_ind_out_tip + c_u_ind_out_hub);
+
+%% 6.2 Main Impeller NPSH & Geometry
+
+p_impeller_eye = p_suction + delta_p_inducer_static - delta_p_between_inducer_impeller;
+
+D_impeller_tip_in = D1t;
+D_impeller_hub_in = D1h;
+
+A_impeller_in_geom = pi/4 * (D_impeller_tip_in^2 - D_impeller_hub_in^2);
+A_impeller_in_eff = A_impeller_in_geom * (1 - B_impeller);
+
+if A_impeller_in_eff <= 0
+    error('The effective impeller inlet area is not positive.');
 end
 
-denom_nss = ((lambda_c + lambda_w)*phi_eff^2 + lambda_w*(1 - swirl_term)^2)^0.75;
-nss_formula = 158 * sqrt(phi_eff * kn) / denom_nss;
+c_m_impeller_LE = Q / A_impeller_in_eff;
+u_impeller_tip_in = Omega * D_impeller_tip_in / 2;
+
+c_u_impeller_in = c_u_ind_out_mean;
+
+c_abs_impeller_eye = hypot(c_m_impeller_LE, c_u_impeller_in);
+w_impeller_LE = hypot(c_m_impeller_LE, u_impeller_tip_in - c_u_impeller_in);
+
+NPSH_A_impeller = (p_impeller_eye - p_vapor) / (rho_in * g) + c_abs_impeller_eye^2 / (2*g);
+NPSH_R_impeller = sigma_impeller * w_impeller_LE^2 / (2*g);
+margin_impeller = NPSH_A_impeller - NPSH_R_impeller;
+
+%% 6.3 Inducer flow angles for CAD export
+
+beta_ind_out_flujo = atan2(u_inducer_tip - c_u_ind_out_tip, c_m_inducer_LE);
+beta_ind_hub_flujo = atan2(u_ind_hub - c_u_ind_out_hub, c_m_inducer_LE);
+
+i_inc = 3 * (pi/180);
+beta_pala_tip = beta_ind_out_flujo + i_inc;
+beta_pala_hub = beta_ind_hub_flujo + i_inc;
+
+%% 6.4 Slip Factor & Ángulo Físico de la Pala (Impulsor)
+
+N_B_R = 6; 
+delta_M = (delta_t + delta_h) / 2;
+
+beta2B_guess = beta2; 
+error_beta = 1;
+iter = 0;
+
+while error_beta > 1e-5 && iter < 100
+    iter = iter + 1;
+    SF_wiesner = 1 - (sqrt(cos(beta2B_guess)) / (N_B_R^0.7));
+    delta_M_lim = exp(-8.16 * cos(beta2B_guess) / N_B_R);
+    
+    if delta_M > delta_M_lim
+        SF = SF_wiesner * (1 - ((delta_M - delta_M_lim) / (1 - delta_M_lim))^3);
+    else
+        SF = SF_wiesner;
+    end
+    
+    c2u_inf = c2u / SF;
+    beta2B_new = atan((u2 - c2u_inf) / c2m);
+    error_beta = abs(beta2B_new - beta2B_guess);
+    beta2B_guess = beta2B_new;
+end
+
+beta2B = beta2B_guess;
+properties.beta2B = rad2deg(beta2B);
+properties.Slip_Factor = SF;
+properties.N_blades = N_B_R;
+
+% Guardar propiedades del Inductor para CAD
+properties.Inducer_D_tip = D_ind_tip_in;
+properties.Inducer_D_hub = D_ind_hub_in;
+properties.Inducer_c_m = c_m_inducer_LE;
+properties.Inducer_beta_pala_tip_deg = rad2deg(beta_pala_tip);
+properties.Inducer_beta_pala_hub_deg = rad2deg(beta_pala_hub);
+properties.Inducer_N_blades = 3;
 
 %% 7. Warnings
-
-properties.warnings = struct('code', {}, 'message', {}, 'value', {});
 
 if delta_t <= delta_h
     msg = 'Geometría no válida: delta_t <= delta_h, lo que implica b1 <= 0.';
@@ -179,6 +287,22 @@ if delta_t <= delta_h
     properties.warnings(end+1).code = 'INVALID_B1';
     properties.warnings(end).message = msg;
     properties.warnings(end).value = delta_t - delta_h;
+end
+
+if margin_inducer < 0
+    msg = sprintf('¡Peligro! Margen de cavitación del Inductor negativo (%.4f m)', margin_inducer);
+    warning(msg);
+    properties.warnings(end+1).code = 'INDUCER_CAVITATION';
+    properties.warnings(end).message = msg;
+    properties.warnings(end).value = margin_inducer;
+end
+
+if margin_impeller < 0
+    msg = sprintf('¡Peligro! Margen de cavitación del Impulsor negativo (%.4f m).', margin_impeller);
+    warning(msg);
+    properties.warnings(end+1).code = 'IMPELLER_CAVITATION';
+    properties.warnings(end).message = msg;
+    properties.warnings(end).value = margin_impeller;
 end
 
 if b2_over_D2 < 0.04 || b2_over_D2 > 0.20
@@ -221,14 +345,6 @@ if R < 0.5 || R > 0.75
     properties.warnings(end).value = R;
 end
 
-if NPSH_R > NPSH
-    msg = sprintf('NPSH_R = %.4f m es mayor que NPSH = %.4f m. Margen de cavitación insuficiente.', NPSH_R, NPSH);
-    warning(msg);
-    properties.warnings(end+1).code = 'NPSH_INSUFFICIENT';
-    properties.warnings(end).message = msg;
-    properties.warnings(end).value = NPSH_R - NPSH;
-end
-
 %% 8. Outputs
 
 properties.p = p_final;
@@ -236,8 +352,14 @@ properties.T = py.CoolProp.CoolProp.PropsSI('T', 'P', properties.p, 'H', h_out_i
 properties.rho = py.CoolProp.CoolProp.PropsSI('D', 'P', properties.p, 'T', properties.T, 'Oxygen');
 properties.c_p = py.CoolProp.CoolProp.PropsSI('CPMASS', 'T', properties.T, 'P', properties.p, 'Oxygen');
 
-properties.NPSH = NPSH;
-properties.NPSH_R = NPSH_R;
+properties.NPSH_system = NPSH_system;
+properties.NPSH_A_inducer = NPSH_A_inducer;
+properties.NPSH_R_inducer = NPSH_R_inducer;
+properties.NPSH_A_impeller = NPSH_A_impeller;
+properties.NPSH_R_impeller = NPSH_R_impeller;
+
+properties.Margin_Inducer = margin_inducer;
+properties.Margin_Impeller = margin_impeller;
 properties.Head_Total = Head_Total;
 properties.Head_Per_Stage = Head_per_stage;
 properties.Volumetric_Q = Q;
@@ -290,13 +412,9 @@ properties.p_in = p_in;
 properties.p_in_eff = p_in_eff;
 properties.delta_p_inducer = delta_p_inducer;
 
-properties.nss_formula = nss_formula;
-
 properties.alpha1 = alpha1_eff;
 properties.beta1 = beta1;
 properties.alpha2 = alpha2;
-properties.beta2 = beta2;
-properties.beta2B = "inutil";
 
 properties.warning_messages = {properties.warnings.message};
 
@@ -308,9 +426,11 @@ key_values.u2               = u2;
 key_values.psi              = psi;
 key_values.phi              = phi_eff;
 key_values.n_stages         = n_stages;
-key_values.Head             = Head_Total; % Nota que run_cycle pide .Head para LOx
-key_values.NPSH             = NPSH;
-key_values.N_max_cavitation = N_max_rpm;
+key_values.Head             = Head_Total; 
+key_values.Margin_Inducer   = margin_inducer;
+key_values.Margin_Impeller  = margin_impeller;
+key_values.NPSH_system      = NPSH_system;
+key_values.N_max_cavitation = rpm_limit;
 key_values.Ns_pump          = N_s_universal;
 
 end
