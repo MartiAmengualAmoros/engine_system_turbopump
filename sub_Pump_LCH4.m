@@ -31,23 +31,18 @@ Head_per_stage = Head_Total / n_stages;
 
 %% 2. Design inputs
 
-eta_inducer = 0.60; 
-delta_p_inducer = 2e5;   % [Pa]
-alpha1_inducer = deg2rad(5);      % [rad]
-
+delta_p_inducer = 1.5e5;   % [Pa]
 
 eta_hyd_guess = 0.7;
 delta_h = 0.38;
 
-b2_over_D2 = 0.15;
+b2_over_D2 = 0.12;
 
-N_ss = 400;
+N_ss = 410;
 
 %% 3. Effective inlet conditions after inducer
 
-alpha1_eff = alpha1_inducer;
-
-D_pipe_suction = 0.05; % [m] Suction pipe diameter, assumed for NPSH calculation
+D_pipe_suction = 0.06; % [m] Suction pipe diameter, assumed for NPSH calculation
 A_pipe_suction = pi/4 * D_pipe_suction^2; % [m^2] Suction pipe area, assumed for NPSH calculation
 c_abs_suction = Q / A_pipe_suction; % [m/s] Absolute velocity at suction pipe
 
@@ -90,8 +85,7 @@ u2 = sqrt(inputs.g0 * Head_per_stage / psi_id);
 D2 = 60 * u2 / (pi * N_max_rpm);
 
 % Rotor tip diameter ratio guided by cavitation correlation
-delta_t = sqrt(delta_h^2 + ...
-    0.588 * (N_s_universal^(4/3)) * psi_id * (((lambda_c + lambda_w) / lambda_w)^(1/3)));
+delta_t = sqrt(delta_h^2 + 0.588 * (N_s_universal^(4/3)) * psi_id * (((lambda_c + lambda_w) / lambda_w)^(1/3)));
 
 D1h = delta_h * D2;
 D1t = delta_t * D2;
@@ -109,6 +103,18 @@ c1m_eff = c1m_base;
 
 phi_base = c1m_base / u2;
 phi_eff = c1m_eff / u2;
+
+% Swirl 
+u_inducer_tip = Omega * D1t / 2;
+u_ind_hub     = Omega * D1h / 2;
+
+Delta_h_ind = delta_p_inducer / (rho_in * inputs.g0);   % delta_p_inducer definido en Sección 2
+
+c_u_ind_out_tip  = Delta_h_ind * inputs.g0 / u_inducer_tip;   % Euler: Delta_h = u*c_u/g
+c_u_ind_out_hub  = Delta_h_ind * inputs.g0 / u_ind_hub;
+c_u_ind_out_mean = 0.5 * (c_u_ind_out_tip + c_u_ind_out_hub);
+
+alpha1_eff = atan2(c_u_ind_out_mean, c1m_eff);
 
 % Rotor meridional velocity ratio from geometry
 xi = (delta_t^2 - delta_h^2) / (4 * b2_over_D2);
@@ -152,7 +158,7 @@ c2 = c2m / cos(alpha2);
 de_haller_ratio = w2 / w1;
 
 if de_haller_ratio < 0.65
-    msg = sprintf('Alerta aerodinámica: Ratio de De Haller = %.2f (Peligro de desprendimiento de capa límite en el rodete).', de_haller_ratio);
+    msg = sprintf('De Haller Ratio = %.2f.', de_haller_ratio);
     warning(msg);
     properties.warnings(end+1).code = 'DE_HALLER_LOW';
     properties.warnings(end).message = msg;
@@ -171,11 +177,11 @@ properties.kinematics.alpha2_deg = rad2deg(alpha2);
 g = inputs.g0;
 
 % 1. Required input parameters for NPSH calculations
-sigma_inducer = 0.08;
+sigma_inducer = 0.065;
 sigma_impeller = 0.2;
-B_inducer = 0.2;
+B_inducer = 0.15;
 B_impeller = 0.12;
-delta_p_between_inducer_impeller = 20000; % Assume ~1% of total head loss
+delta_p_between_inducer_impeller = 0.01 * delta_p_inducer; % Assume ~1% of total head loss
 
 % 2. Reutilización de variables previamente definidas
 delta_p_inducer_static = delta_p_inducer; % Definido en Sección 2
@@ -223,7 +229,7 @@ Delta_h_ind = delta_p_inducer_static / (rho_in * g);
 c_u_ind_out_tip = Delta_h_ind * g / u_inducer_tip;
 c_u_ind_out_hub = Delta_h_ind * g / u_ind_hub;
 
-% Swirl medio que efectivamente llega al ojo del impeller principal
+% Swirl medio que llega al ojo del impeller principal
 c_u_ind_out_mean = 0.5 * (c_u_ind_out_tip + c_u_ind_out_hub);
 
 
@@ -244,7 +250,6 @@ end
 c_m_impeller_LE = Q / A_impeller_in_eff;
 u_impeller_tip_in = Omega * D_impeller_tip_in / 2;
 
-% Swirl real heredado del inducer, en vez de la estimación fija alpha1_eff
 c_u_impeller_in = c_u_ind_out_mean;
 
 c_abs_impeller_eye = hypot(c_m_impeller_LE, c_u_impeller_in);
@@ -363,6 +368,7 @@ properties.delta_t = delta_t;
 properties.xi = xi;
 properties.R = R;
 properties.de_haller_ratio = de_haller_ratio;
+properties.alpha1_eff_deg = rad2deg(alpha1_eff);
 
 properties.b2_over_D2 = b2_over_D2;
 properties.eta_hyd = eta_hyd;
